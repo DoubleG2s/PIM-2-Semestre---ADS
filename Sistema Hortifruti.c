@@ -8,7 +8,7 @@ typedef struct {
     char nome[30];
     float preco;
     int quantidade;
-    char grupo[15];
+    int grupo_id; // 0: Frutas, 1: Legumes, 2: Verduras
 } Produto;
 
 void cadastrarProduto(Produto **produtos, int *n);
@@ -18,6 +18,7 @@ void editarProduto(Produto *produtos, int n);
 void salvarDados(Produto *produtos, int n, const char *arquivo);
 void carregarDados(Produto **produtos, int *n, const char *arquivo);
 int produtoJaExiste(Produto *produtos, int n, char nome[]);
+const char *obterNomeGrupo(int grupo_id);
 
 int main() {
     Produto *produtos = NULL;
@@ -75,10 +76,19 @@ int produtoJaExiste(Produto *produtos, int n, char nome[]) {
     return 0;
 }
 
+const char *obterNomeGrupo(int grupo_id) {
+    switch(grupo_id) {
+        case 0: return "Frutas";
+        case 1: return "Legumes";
+        case 2: return "Verduras";
+        default: return "Desconhecido";
+    }
+}
+
 void cadastrarProduto(Produto **produtos, int *n) {
-    char nome[30], grupo[15];
+    char nome[30];
     float preco;
-    int quantidade;
+    int quantidade, grupo_id;
 
     printf("Digite o nome do produto: ");
     getchar();
@@ -104,10 +114,12 @@ void cadastrarProduto(Produto **produtos, int *n) {
         return;
     }
 
-    printf("Digite o grupo do produto (Frutas, Verduras, Legumes): ");
-    getchar();
-    fgets(grupo, sizeof(grupo), stdin);
-    grupo[strcspn(grupo, "\n")] = '\0';
+    printf("Digite o ID do grupo do produto (0: Frutas, 1: Legumes, 2: Verduras): ");
+    if (scanf("%d", &grupo_id) != 1 || grupo_id < 0 || grupo_id > 2) {
+        printf("Erro: ID de grupo inválido.\n");
+        while (getchar() != '\n');
+        return;
+    }
 
     *produtos = realloc(*produtos, (*n + 1) * sizeof(Produto));
     if (*produtos == NULL) {
@@ -119,7 +131,7 @@ void cadastrarProduto(Produto **produtos, int *n) {
     strcpy((*produtos)[*n].nome, nome);
     (*produtos)[*n].preco = preco;
     (*produtos)[*n].quantidade = quantidade;
-    strcpy((*produtos)[*n].grupo, grupo);
+    (*produtos)[*n].grupo_id = grupo_id;
     (*n)++;
 
     printf("Produto cadastrado com sucesso!\n");
@@ -136,7 +148,7 @@ void listarProdutos(Produto *produtos, int n) {
 
     for (int i = 0; i < n; i++) {
         printf("%-3d | %-20s | R$%-7.2f | %-10d | %-10s\n", 
-               produtos[i].id, produtos[i].nome, produtos[i].preco, produtos[i].quantidade, produtos[i].grupo);
+               produtos[i].id, produtos[i].nome, produtos[i].preco, produtos[i].quantidade, obterNomeGrupo(produtos[i].grupo_id));
     }
 }
 
@@ -233,9 +245,9 @@ void editarProduto(Produto *produtos, int n) {
     for (int i = 0; i < n; i++) {
         if (produtos[i].id == id) {
             printf("Quantidade atual: %d\n", produtos[i].quantidade);
-            printf("Digite a nova quantidade (deve ser um inteiro positivo): ");
+            printf("Digite a nova quantidade em estoque: ");
             if (scanf("%d", &nova_quantidade) != 1 || nova_quantidade < 0) {
-                printf("Quantidade inválida! Deve ser 0 ou mais.\n");
+                printf("Erro: A quantidade deve ser um número inteiro não negativo.\n");
                 while (getchar() != '\n');
                 return;
             }
@@ -245,31 +257,37 @@ void editarProduto(Produto *produtos, int n) {
             return;
         }
     }
+
     printf("Produto com ID %d não encontrado.\n", id);
 }
 
 void salvarDados(Produto *produtos, int n, const char *arquivo) {
-    if (n == 0) {
-        remove(arquivo);
+    FILE *fp = fopen(arquivo, "w");
+    if (fp == NULL) {
+        printf("Erro ao salvar os dados.\n");
         return;
     }
-    FILE *file = fopen(arquivo, "w");
-    if (file == NULL) {
-        printf("Erro ao abrir o arquivo para escrita.\n");
-        return;
-    }
+
     for (int i = 0; i < n; i++) {
-        fprintf(file, "%d,%s,%.2f,%d,%s\n", produtos[i].id, produtos[i].nome, produtos[i].preco, produtos[i].quantidade, produtos[i].grupo);
+        fprintf(fp, "%d|%s|%.2f|%d|%d\n",
+                produtos[i].id, produtos[i].nome, produtos[i].preco, produtos[i].quantidade, produtos[i].grupo_id);
     }
-    fclose(file);
+
+    fclose(fp);
+    printf("Dados salvos com sucesso!\n");
 }
 
 void carregarDados(Produto **produtos, int *n, const char *arquivo) {
-    FILE *file = fopen(arquivo, "r");
-    if (file == NULL) return;
+    FILE *fp = fopen(arquivo, "r");
+    if (fp == NULL) {
+        printf("Arquivo não encontrado. Um novo será criado ao salvar dados.\n");
+        return;
+    }
 
-    Produto p;
-    while (fscanf(file, "%d,%[^,],%f,%d,%[^,\n]", &p.id, p.nome, &p.preco, &p.quantidade, p.grupo) == 5) {
+    char linha[100];
+    while (fgets(linha, sizeof(linha), fp)) {
+        Produto p;
+        sscanf(linha, "%d|%[^|]|%f|%d|%d", &p.id, p.nome, &p.preco, &p.quantidade, &p.grupo_id);
         *produtos = realloc(*produtos, (*n + 1) * sizeof(Produto));
         if (*produtos == NULL) {
             printf("Erro ao alocar memória.\n");
@@ -278,5 +296,6 @@ void carregarDados(Produto **produtos, int *n, const char *arquivo) {
         (*produtos)[*n] = p;
         (*n)++;
     }
-    fclose(file);
+
+    fclose(fp);
 }
